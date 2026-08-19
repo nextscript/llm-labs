@@ -12,6 +12,9 @@ This repository contains **LLM test prompts and their results** only.
 ## Demos
 [Blockfall](http://htmlpreview.github.io/?https://raw.githubusercontent.com/nextscript/llm-labs/refs/heads/main/Blockfall/game.html)
 
+[space invaders](http://htmlpreview.github.io/?https://raw.githubusercontent.com/nextscript/llm-labs/refs/heads/main/space%20invaders/game.html)
+
+
 ## About
 
 Every file in this repository is either a test prompt or the result of running it through an LLM. This repo is a record of test runs — each prompt is paired with the output it generated.

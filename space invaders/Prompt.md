@@ -1,75 +1,78 @@
-# Space Invaders — Wiederaufbau-Handbuch
+# Prompt — Build a self-contained Space Invaders game
 
-Dieses Handbuch beschreibt, wie das Spiel aus der Quelldatei als **eine einzige, self-contained HTML-Datei** aufgebaut wird. Damit kannst du es jederzeit nachbauen.
+> Hand this prompt to an agent (or follow it yourself) to rebuild the game from scratch.
+> Source game logic lives in `projects/test.txt` (JSON, `code` field). The finished file is `space_invaders.html`.
 
-## Was ist das?
+## Goal
 
-Eine vollständige Space-Invaders-Web-App als **eine einzige HTML-Datei** (`space_invaders.html`):
+Build a complete **Space Invaders** game that runs from **one single HTML file**. The file must be fully self-contained and work offline with no build step.
 
-- HTML + CSS + JavaScript **inline** (eine Datei)
-- **Canvas-2D**-Rendering, Pixel-Art-Sprites (prozedural erzeugt, keine Bilddateien)
-- **Web-Audio**-Synth: alle Sounds und Musik werden zur Laufzeit synthetisiert — keine Audio-Dateien
-- **Keine** externen Libraries, **keine** Internet-Ressourcen, **keine** Bild-/Audio-Assets
-- Highscores nur **lokal** (`localStorage`), kein Server
-- Ship-Select-Menü, Booster-/Level-Phase, Boss-Phase, Sound-Menü (ESC)
+## Hard constraints
 
-## Dateien
+- **One HTML file.** All HTML, CSS, and JavaScript inline. No separate files.
+- **No external libraries** — no CDNs, no npm packages, no frameworks.
+- **No internet resources** — no remote scripts, styles, fonts, images, or audio.
+- **No image or audio assets.** All sprites are drawn procedurally on a 2D canvas; all sound is synthesized at runtime with the Web Audio API.
+- **No server.** Highscores are stored locally in `localStorage` only.
 
-| Datei | Zweck |
+## Tech
+
+- HTML5 + CSS + vanilla JavaScript.
+- Rendering: **Canvas 2D** (`<canvas id="game">`), pixel-art sprites generated in code.
+- Sound: **Web Audio API**, fully synthesized.
+- The canvas is sized to the window (`window.innerWidth` × `window.innerHeight`); layout is responsive.
+
+## Game features
+
+- Ship-select menu, booster/level phase, boss phase, and a sound menu.
+- Levels, score, lives, power-ups, shields, enemy swarms with formation types.
+- Local highscore list (top 5), persisted in `localStorage` (key `gvf_si_hs_cache`).
+- Audio settings (mute, music volume, SFX volume) persisted in `localStorage` (key `gvf_si_audio_settings`).
+
+## Controls
+
+| Key | Action |
 |---|---|
-| `projects/test.txt` | **Quelle**: JSON (`custom-code-player-project`) mit dem kompletten Spielcode im `code`-Feld |
-| `space_invaders.html` | **Ergebnis**: die fertige, spielbare Datei |
-| `create.md` | dieses Handbuch |
+| `←` `→` or `A` / `D` | move |
+| `↑` or `W` or `SPACE` | shoot |
+| `ESC` | sound menu (mute, music/SFX volume) |
 
-## Steuerung
+Audio unlocks on the first user gesture (browser autoplay rule).
 
-| Taste | Aktion |
-|---|---|
-| `←` `→` oder `A` / `D` | bewegen |
-| `↑` oder `W` oder `SPACE` | schießen |
-| `ESC` | Sound-Menü (Mute, Musik-/SFX-Lautstärke) |
+## Sound design (Web Audio synth)
 
-> Audio startet erst nach der ersten Eingabe (Browser-Autoplay-Regel).
+Fully synthesized, no assets. Lazy `AudioContext` created on user gesture; gain chain `master` → `musicGain` / `sfxGain`.
 
-## Der Aufbau (Transformation)
+- **One-shot SFX** (oscillators + noise):
+  - `shoot` — laser blip (square, 880→320 Hz).
+  - `invaderKilled` — explosion (filtered noise burst + low sine drop).
+  - `swarmMove` — UFO warble (sine with LFO on frequency).
+- **Looping music** via a lookahead scheduler (`setInterval`):
+  - `bg` — 108 BPM, triangle bass + sine arpeggio.
+  - `bossBg` — 150 BPM, sawtooth bass + square arps + kick/hat.
 
-Die Quelle in `test.txt` ist ein **flaches JS-Script** für die „GVF-Player-Harness" (~2500 Zeilen). Es erwartet, dass ihm die Globals `canvas`, `ctx`, `width`, `height` bereitstehen. Der Spielzustand hängt an `canvas._gvfSI`.
+Represent sound as a symbolic-key map so call sites read `playOne(SND_URLS.shoot, 0.12)`:
 
-Um daraus die self-contained HTML zu machen, werden **4 Schritte** gemacht. Das eigentliche Spiel-Logik-Code bleibt dabei unverändert.
-
-### Schritt 0 — Code extrahieren
-Das `code`-Feld aus `test.txt` (JSON) extrahieren → flaches JS-Script.
-
-### Schritt 1 — Remote-Highscores entfernen
-Alles, was mit dem Server (`space_invaders_hs.php`) zu tun hat, wird entfernt. Behalten bleibt nur der lokale Cache.
-
-Entfernt:
-- `HS_API` (Konstante), `loadHSRemote`, `addHSRemote`, `syncHSFromServer`, `syncAddHS`
-- die `hsRemoteTried`-Flag und alle `syncHSFromServer()`-/`syncAddHS()`-Aufrufstellen
-
-Behalten:
-- `sanitizeHSList`, `loadHSLocal` / `saveHSLocal` (localStorage-Key `gvf_si_hs_cache`)
-- `loadHS` / `saveHS` / `addHS`
-
-### Schritt 2 — Audio → Web-Audio-Synth
-Die Originalquelle spielte 5 **ferne Audio-URLs** ab (`SND_URLS` mit echten URLs). Das wird durch einen reinen Web-Audio-Synth ersetzt:
-
-1. `SND_URLS` wird eine **Symbol-Key-Map** (die Call-Sites `playOne(SND_URLS.X, 0.12)` bleiben unverändert):
 ```js
-const SND_URLS = {
-    shoot: 'shoot',
-    invaderKilled: 'invaderKilled',
-    swarmMove: 'swarmMove',
-    bg: 'bg',
-    bossBg: 'bossBg'
-};
+const SND_URLS = { shoot:'shoot', invaderKilled:'invaderKilled', swarmMove:'swarmMove', bg:'bg', bossBg:'bossBg' };
 ```
-2. `createSoundSystem(initialSettings)` wird eine **Web-Audio-Implementierung** (siehe unten). Das Interface wird exakt repliziert, da es als `S.audio.*` genutzt wird:
-   - Props: `unlocked`, `pendingLoop` (`'bg'`/`'boss'`), `muted`, `musicVolume`, `sfxVolume`
-   - Methoden: `save()`, `applyVolumes()`, `stopAllLoops()`, `resetForNewRun()`, `playOne(url, baseVolume)`, `ensureUnlocked()`, `applyLoop(kind)`, `setMuted(v)`, `toggleMuted()`, `adjustMusic(delta)`, `adjustSfx(delta)`
 
-### Schritt 3 — In `runFrame` + Harness-Wrapper wickeln
-Das Script wird in eine Funktion `runFrame(canvas, ctx, width, height)` gewrappt und pro Frame aufgerufen. Die fertige HTML-Struktur:
+The sound system exposes: `unlocked`, `pendingLoop`, `muted`, `musicVolume`, `sfxVolume`, and methods `save()`, `applyVolumes()`, `stopAllLoops()`, `resetForNewRun()`, `playOne(url, baseVolume)`, `ensureUnlocked()`, `applyLoop(kind)`, `setMuted(v)`, `toggleMuted()`, `adjustMusic(delta)`, `adjustSfx(delta)`.
+
+## Layout
+
+The game field has aspect ratio `GH = GW*1.35` and is centered, with a right-side panel. Constrain the field width so it fits the window height (no top/bottom clipping on wide windows):
+
+```js
+const GW = Math.min(width*0.65, height/1.35);   // ensures GH = GW*1.35 <= height
+const GH = GW*1.35;
+const GX = Math.floor((width-GW)/2);
+const GY = Math.floor((height-GH)/2);
+```
+
+## Harness
+
+Wrap the game script in `runFrame(canvas, ctx, width, height)` and drive it with a `requestAnimationFrame` loop:
 
 ```html
 <!DOCTYPE html>
@@ -95,7 +98,7 @@ Das Script wird in eine Funktion `runFrame(canvas, ctx, width, height)` gewrappt
   const width=canvas.width, height=canvas.height;
 
   function runFrame(canvas, ctx, width, height){
-    // … hier steht das (transformierte) Spiel-Script …
+    // … game script …
   }
 
   function loop(){
@@ -109,216 +112,19 @@ Das Script wird in eine Funktion `runFrame(canvas, ctx, width, height)` gewrappt
 </html>
 ```
 
-`width`/`height` = Canvas-Pixelmaße (= Fenstergröße). Der Canvas wird auf `window.innerWidth` × `window.innerHeight` gesetzt.
+## Build steps
 
-### Schritt 4 — Layout-Fix (kein Clipping oben/unten)
-Das Spielfeld hat Seitenverhältnis `GH = GW*1.35` und wird zentriert. Damit es bei breitem Fenster nicht über die Fensterhöhe hinausragt (Clipping oben/unten), wird `GW` zusätzlich auf `height/1.35` begrenzt:
+1. Extract the `code` field from `projects/test.txt` → flat JS (~2500 lines). It expects globals `canvas`, `ctx`, `width`, `height`; state hangs off `canvas._gvfSI`.
+2. **Strip remote highscores** — remove `HS_API`, `loadHSRemote`, `addHSRemote`, `syncHSFromServer`, `syncAddHS`, the `hsRemoteTried` flag, and all their call sites. Keep only the local cache (`sanitizeHSList`, `loadHSLocal`/`saveHSLocal`, `loadHS`/`saveHS`/`addHS`).
+3. **Replace audio** — turn `SND_URLS` into the symbolic-key map and rewrite `createSoundSystem` as the Web Audio implementation above. Keep the exact interface (used as `S.audio.*`).
+4. **Wrap** — put the script in `runFrame` + the rAF loop (harness above).
+5. **Fix layout** — apply the `GW` constraint so the field fits the window height.
+6. **Assemble** the single HTML file (head/CSS + `<canvas id="game">` + IIFE script).
+7. **Verify** — `node --check` on the extracted JS → `SYNTAX_OK`. Save the result in the project folder, not `/tmp`.
 
-```js
-// FALSCH (überläuft vertikal):
-const GW = Math.min(width*0.65, height*0.85);
-// RICHTIG (passt exakt in die Höhe):
-const GW = Math.min(width*0.65, height/1.35);
-const GH = GW*1.35;
-const GX = Math.floor((width-GW)/2);
-const GY = Math.floor((height-GH)/2);
-```
+## Acceptance
 
-## Web-Audio-Sound-System (Schritt 2, Kern)
-
-Vollständig synthetisiert, keine externen Assets. Lazy `AudioContext` auf User-Geste, Gain-Ketten `master` → `musicGain` / `sfxGain`, One-Shot-SFX via Oszillatoren/Noise, Looping-Musik via Lookahead-Scheduler.
-
-```js
-function createSoundSystem(initialSettings){
-    const AC = (typeof window!=='undefined') ? (window.AudioContext||window.webkitAudioContext) : null;
-    let actx=null, master=null, musicGain=null, sfxGain=null;
-    let musicTimer=null, stepIndex=0, nextNoteTime=0, currentKind=null;
-
-    const midi=function(m){ return 440*Math.pow(2,(m-69)/12); };
-
-    // Musik-Pattern: 8tel-Schritte. b=Bass(midi), a=Arp(midi), k=Kick, h=Hat
-    const BG_PATTERN=[
-        {b:45,a:57},{a:60},{a:64},{a:69},{b:45,a:67},{a:64},{a:60},{a:67},
-        {b:43,a:55},{a:57},{a:60},{a:64},{b:43,a:62},{a:60},{a:57},{a:62}
-    ];
-    const BOSS_PATTERN=[
-        {b:45,k:1},{b:45},{b:45,h:1},{b:45},{b:45,k:1},{b:48},{b:45,h:1},{b:45},
-        {b:43,k:1},{b:43},{b:43,h:1},{b:45},{b:45,k:1},{b:48},{b:43,h:1},{b:43}
-    ];
-
-    function ensureCtx(){
-        if(actx) return true;
-        if(!AC) return false;
-        try{
-            actx=new AC();
-            master=actx.createGain(); master.gain.value=1; master.connect(actx.destination);
-            musicGain=actx.createGain(); musicGain.connect(master);
-            sfxGain=actx.createGain(); sfxGain.connect(master);
-            return true;
-        }catch(_){ actx=null; return false; }
-    }
-    function stopMusic(){
-        if(musicTimer){ clearInterval(musicTimer); musicTimer=null; }
-        currentKind=null;
-    }
-    function tone(freq,t,dur,type,dest,vol){
-        if(!actx) return;
-        const o=actx.createOscillator(), g=actx.createGain();
-        o.type=type; o.frequency.setValueAtTime(freq,t);
-        g.gain.setValueAtTime(0,t);
-        g.gain.linearRampToValueAtTime(vol,t+0.012);
-        g.gain.setValueAtTime(vol,t+dur*0.7);
-        g.gain.linearRampToValueAtTime(0,t+dur);
-        o.connect(g); g.connect(dest);
-        o.start(t); o.stop(t+dur+0.02);
-    }
-    function scheduleStep(step,t,stepDur,kind){
-        if(!actx) return;
-        if(step.b){
-            if(kind==='boss') tone(midi(step.b),t,stepDur*1.8,'sawtooth',musicGain,0.8);
-            else tone(midi(step.b),t,stepDur*3.5,'triangle',musicGain,0.7);
-        }
-        if(step.a){
-            tone(midi(step.a),t,stepDur*0.95,(kind==='boss'?'square':'sine'),musicGain,kind==='boss'?0.5:0.6);
-        }
-        if(step.k){
-            const o=actx.createOscillator(), g=actx.createGain();
-            o.type='sine'; o.frequency.setValueAtTime(120,t); o.frequency.exponentialRampToValueAtTime(45,t+0.12);
-            g.gain.setValueAtTime(0.7,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.18);
-            o.connect(g); g.connect(musicGain); o.start(t); o.stop(t+0.2);
-        }
-        if(step.h){
-            const buf=actx.createBuffer(1,Math.max(1,actx.sampleRate*0.05)|0,actx.sampleRate);
-            const d=buf.getChannelData(0);
-            for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,2);
-            const s=actx.createBufferSource(); s.buffer=buf;
-            const f=actx.createBiquadFilter(); f.type='highpass'; f.frequency.value=6000;
-            const g=actx.createGain(); g.gain.setValueAtTime(0.4,t);
-            s.connect(f); f.connect(g); g.connect(musicGain); s.start(t);
-        }
-    }
-    function startMusic(kind){
-        stopMusic();
-        if(!ensureCtx()) return;
-        const bpm=kind==='boss'?150:108;
-        const stepDur=60/bpm/2;
-        const pattern=kind==='boss'?BOSS_PATTERN:BG_PATTERN;
-        stepIndex=0;
-        nextNoteTime=actx.currentTime+0.06;
-        currentKind=kind;
-        musicTimer=setInterval(function(){
-            if(!actx) return;
-            while(nextNoteTime<actx.currentTime+0.18){
-                scheduleStep(pattern[stepIndex%pattern.length],nextNoteTime,stepDur,kind);
-                nextNoteTime+=stepDur;
-                stepIndex++;
-            }
-        },25);
-    }
-    function playSfx(key,baseVolume){
-        if(!ensureCtx()) return;
-        const t=actx.currentTime;
-        const vol=clamp(baseVolume/0.12,0,1);
-        if(key==='shoot'){
-            const o=actx.createOscillator(), g=actx.createGain();
-            o.type='square'; o.frequency.setValueAtTime(880,t); o.frequency.exponentialRampToValueAtTime(320,t+0.09);
-            g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol*0.6,t+0.008); g.gain.exponentialRampToValueAtTime(0.0001,t+0.12);
-            o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+0.14);
-        } else if(key==='invaderKilled'){
-            const dur=0.45;
-            const buf=actx.createBuffer(1,Math.max(1,actx.sampleRate*dur)|0,actx.sampleRate);
-            const d=buf.getChannelData(0);
-            for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,1.5);
-            const s=actx.createBufferSource(); s.buffer=buf;
-            const f=actx.createBiquadFilter(); f.type='lowpass'; f.frequency.setValueAtTime(2500,t); f.frequency.exponentialRampToValueAtTime(200,t+dur);
-            const g=actx.createGain(); g.gain.setValueAtTime(vol*0.8,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-            s.connect(f); f.connect(g); g.connect(sfxGain); s.start(t);
-            const o=actx.createOscillator(), g2=actx.createGain();
-            o.type='sine'; o.frequency.setValueAtTime(160,t); o.frequency.exponentialRampToValueAtTime(40,t+0.3);
-            g2.gain.setValueAtTime(vol*0.6,t); g2.gain.exponentialRampToValueAtTime(0.0001,t+0.35);
-            o.connect(g2); g2.connect(sfxGain); o.start(t); o.stop(t+0.4);
-        } else if(key==='swarmMove'){
-            const o=actx.createOscillator(), g=actx.createGain();
-            const lfo=actx.createOscillator(), lfoG=actx.createGain();
-            o.type='sine'; o.frequency.setValueAtTime(1100,t);
-            lfo.type='sine'; lfo.frequency.setValueAtTime(9,t); lfoG.gain.setValueAtTime(180,t);
-            lfo.connect(lfoG); lfoG.connect(o.frequency);
-            g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol*0.5,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.35);
-            o.connect(g); g.connect(sfxGain);
-            lfo.start(t); o.start(t); o.stop(t+0.4); lfo.stop(t+0.4);
-        }
-    }
-
-    const sys={
-        unlocked:false,
-        pendingLoop:'bg',
-        muted: !!initialSettings.muted,
-        musicVolume: clamp(initialSettings.musicVolume,0,1),
-        sfxVolume: clamp(initialSettings.sfxVolume,0,1),
-        save:function(){
-            saveAudioSettings({muted:this.muted,musicVolume:this.musicVolume,sfxVolume:this.sfxVolume});
-        },
-        applyVolumes:function(){
-            if(!actx) return;
-            const t=actx.currentTime;
-            musicGain.gain.setValueAtTime(this.muted?0:this.musicVolume,t);
-            sfxGain.gain.setValueAtTime(this.muted?0:this.sfxVolume,t);
-        },
-        stopAllLoops:function(resetTime){ stopMusic(); },
-        resetForNewRun:function(){
-            stopMusic();
-            this.pendingLoop='bg';
-            this.applyVolumes();
-            if(this.unlocked && !this.muted){ startMusic('bg'); }
-        },
-        playOne:function(url,baseVolume){
-            if(!this.unlocked || this.muted) return;
-            playSfx(url,baseVolume);
-        },
-        ensureUnlocked:function(){
-            if(this.unlocked) return;
-            this.unlocked=true;
-            ensureCtx();
-            this.applyVolumes();
-            this.applyLoop(this.pendingLoop||'bg');
-        },
-        applyLoop:function(kind){
-            this.pendingLoop=kind;
-            this.applyVolumes();
-            if(!this.unlocked) return;
-            if(!ensureCtx()) return;
-            if(currentKind===kind) return;
-            startMusic(kind);
-        },
-        setMuted:function(v){ this.muted=!!v; this.applyVolumes(); this.save(); },
-        toggleMuted:function(){ this.setMuted(!this.muted); },
-        adjustMusic:function(delta){
-            this.musicVolume=clamp(Math.round((this.musicVolume+delta)*100)/100,0,1);
-            this.applyVolumes(); this.save();
-        },
-        adjustSfx:function(delta){
-            this.sfxVolume=clamp(Math.round((this.sfxVolume+delta)*100)/100,0,1);
-            this.save();
-        }
-    };
-    sys.applyVolumes();
-    return sys;
-}
-```
-
-> `clamp` und `saveAudioSettings`/`loadAudioSettings` (localStorage-Key `gvf_si_audio_settings`) kommen aus dem Spiel-Script bzw. werden dort bereitgestellt.
-
-## Wieder aufbauen (Checkliste)
-
-1. **Quelle prüfen**: `projects/test.txt` vorhanden (JSON, `code`-Feld mit dem Spiel-Script).
-2. **Code extrahieren**: `code`-Feld → flaches JS.
-3. **Remote-Highscores streifen** (Schritt 1): `HS_API`, `loadHSRemote`, `addHSRemote`, `syncHSFromServer`, `syncAddHS` + alle Aufrufstellen entfernen; nur lokaler Cache bleibt.
-4. **Audio ersetzen** (Schritt 2): `SND_URLS` → Symbol-Key-Map; `createSoundSystem` → Web-Audio (oben).
-5. **Wrapper + Layout** (Schritt 3 + 4): in `runFrame` + rAF-Loop wickeln; `GW = Math.min(width*0.65, height/1.35)`.
-6. **HTML zusammenstellen**: Kopf (CSS) + `<canvas id="game">` + IIFE-Script (siehe Struktur oben).
-7. **Verifizieren**: `node --check` auf dem extrahierten JS → `SYNTAX_OK`; Datei im Projektordner (`C:/Users/Stavr/Desktop/player`) speichern, nicht in `/tmp`.
-
-## Hinweise
-- Alles läuft im Projektordner `C:/Users/Stavr/Desktop/player` — keine Tests/Dateien in `/tmp` oder `C:/tmp`.
-- Das Spiel-Logik-Code (Level-Konfiguration, Sprites, Kollisionen, Phasen) stammt unverändert aus `test.txt`; nur die obigen 4 Punkte sind die Anpassungen.
-- Der fertige Stand ist `space_invaders.html` — dieses Handbuch beschreibt, wie er entstanden ist und wie er neu erzeugt wird.
+- Opens in a browser with no network requests and no console errors.
+- Renders the game field (no top/bottom clipping), runs the rAF loop.
+- Input works (move/shoot/sound menu); sound plays after the first gesture.
+- Highscores and audio settings persist across reloads via `localStorage`.

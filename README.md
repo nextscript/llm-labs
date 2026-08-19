@@ -9,6 +9,9 @@ This repository contains **LLM test prompts and their results** only.
 | **Test prompts** | The prompts used to run each LLM test |
 | **Results** | The outputs the model produced for those prompts |
 
+## Demos
+[Blockfall](http://htmlpreview.github.io/?https://raw.githubusercontent.com/nextscript/llm-labs/refs/heads/main/Blockfall/game.html)
+
 ## About
 
 Every file in this repository is either a test prompt or the result of running it through an LLM. This repo is a record of test runs — each prompt is paired with the output it generated.

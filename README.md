@@ -14,6 +14,8 @@ This repository contains **LLM test prompts and their results** only.
 
 [space invaders](http://htmlpreview.github.io/?https://raw.githubusercontent.com/nextscript/llm-labs/refs/heads/main/space%20invaders/game.html)
 
+[snake](http://htmlpreview.github.io/?https://raw.githubusercontent.com/nextscript/llm-labs/refs/heads/main/snake/game.html)
+
 
 ## About
 

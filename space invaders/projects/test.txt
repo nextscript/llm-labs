@@ -1,5 +1,4 @@
 {
-    "type": "custom-code-player-project",
     "stage": {
         "width": 2160,
         "height": 1265

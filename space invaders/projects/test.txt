@@ -1,9 +1,5 @@
 {
     "type": "custom-code-player-project",
-    "version": 1,
-    "name": "test",
-    "savedAt": "2026-04-21T17:53:16+00:00",
-    "savedBy": "admin",
     "stage": {
         "width": 2160,
         "height": 1265
